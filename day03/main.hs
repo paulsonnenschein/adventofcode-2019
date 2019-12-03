@@ -1,5 +1,5 @@
-import Debug.Trace (trace)
-import Data.List (sort)
+import Data.List (sort, elemIndex)
+import Data.Maybe (fromJust)
 
 main :: IO ()
 main = interact runParts
@@ -8,8 +8,13 @@ type Coord = (Int, Int) -- (x,y)
 data Instr = R Int | U Int | L Int | D Int deriving Show
 
 runParts :: String -> String
-runParts input = unlines ["Part 1:", show.part1 $ (line1,line2)]
-    where [line1, line2] = map parseLine . lines $ input
+runParts input = unlines ["Part 1:", show part1, "Part 2:", show part2]
+ where
+  [path1, path2] = map (tail . evaluatePath . parseLine) . lines $ input
+  matching       = getMatching path1 path2
+  part1          = manhattan . foldr1 minDistance $ matching
+  distances      = map (\c -> (getPathLengthTo c path1, getPathLengthTo c path2)) matching
+  part2          = manhattan . foldr1 minDistance $ distances
 
 parseLine :: String -> [Instr]
 parseLine = map parseInstr . words . replaceCommas
@@ -22,21 +27,23 @@ parseInstr ('L' : val) = L (read val)
 parseInstr ('D' : val) = D (read val)
 parseInstr _           = error "Invalid instruction"
 
-part1 :: ([Instr], [Instr]) -> Int
-part1 (line1, line2) = manhattan min
- where
-  path1    = sort . tail . evaluatePath $ line1
-  path2    = sort . tail . evaluatePath $ line2
-  matching = getMatching path1 path2
-  min = foldr1 (\a min -> if manhattan a < manhattan min then a else min) matching
-
 getMatching :: [Coord] -> [Coord] -> [Coord]
-getMatching [] _  = []
-getMatching _  [] = []
-getMatching (h1 : ls1) (h2 : ls2) | h1 < h2   = getMatching ls1 (h2 : ls2)
-                                  | h1 > h2   = getMatching (h1 : ls1) ls2
-                                  | otherwise = h1 : getMatching ls1 ls2
+getMatching path1 path2 = inner (sort path1) (sort path2)
+ where
+  -- advance until both are equal, lists need to be sorted
+  inner :: [Coord] -> [Coord] -> [Coord]
+  inner [] _  = []
+  inner _  [] = []
+  inner (h1 : ls1) (h2 : ls2) | h1 < h2   = inner ls1 (h2 : ls2)
+                              | h1 > h2   = inner (h1 : ls1) ls2
+                              | otherwise = h1 : inner ls1 ls2
 
+
+minDistance :: Coord -> Coord -> Coord
+minDistance a b = if manhattan a < manhattan b then a else b
+
+getPathLengthTo :: Coord -> [Coord] -> Int
+getPathLengthTo target path = (1+) . fromJust $ elemIndex target path
 
 evaluatePath :: [Instr] -> [Coord]
 evaluatePath line = inner line [(0, 0)] (0, 0)
